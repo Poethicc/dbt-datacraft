@@ -19,6 +19,7 @@
         {%- for column in column_list -%}            
             {%- if  column.lower().endswith('date') 
               or column.lower().endswith('datetime')
+              or column.lower().endswith('day')
               or column.lower().endswith('period_start')
               or column.lower().endswith('timestamp')
               or column.lower().endswith('_time') -%}

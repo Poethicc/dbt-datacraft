@@ -18,9 +18,11 @@
 {%- if execute -%}
 {%- set sourcetype_name = 'ym' -%}
 {%- set pipeline_name = 'events' -%}
-{%- set stream_name = 'yandex_metrika_stream' -%} {# но может быть и иное название стрима, например, data_visits #}
-{# set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_[^_]+_' ~ stream_name ~ '$' #}
-{%- set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_[^_]+_'  -%}
+{%- set template_name = 'default' -%}
+{%- set stream_name = 'raw_data_visits' -%} {# но может быть и иное название стрима, например, data_visits #}
+
+{%- set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_' ~ template_name ~ '(_\d+)?_' ~ stream_name -%}
+{# set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_[^_]+_'  #}
 {%- set relations = datacraft.get_relations_by_re(schema_pattern=target.schema, table_pattern=table_pattern) -%}  
 {%- if not relations -%} 
     {{ exceptions.raise_compiler_error('No relations were found matching the pattern "' ~ table_pattern ~ '". 
@@ -54,9 +56,11 @@ WHERE toDate(__date) BETWEEN '{{date_from}}' AND '{{date_to}}'
 
 SELECT  
     __date, 
+    toLowCardinality(splitByChar('_', __table_name)[7]) AS accountName,
     __table_name,  
     ymsvisitID As visitId,
     ymsclientID AS clientId,
+    toDateTime(ymsdateTime) as eventDateTime,
     extract(ymspurchaseCoupon, '\'([^\'\[\],]+)') AS promoCode,   
     'web' AS osName,
     ymsregionCity AS cityName,
@@ -73,18 +77,7 @@ SELECT
     ymspurchaseID AS transactionId,
     {{ datacraft.get_utmhash('__', ['ymsUTMCampaign', 'ymsUTMContent']) }} AS utmHash,
     1 AS sessions,
-    if(countSubstrings(ymsgoalsID, '131126368')>0,1,0) AS addToCartSessions, 
-    if(countSubstrings(ymsgoalsID, '229829884')>0,1,0) AS cartViewSessions, 
-    if(countSubstrings(ymsgoalsID, '131126557')>0,1,0) AS checkoutSessions, 
-    if(countSubstrings(ymsgoalsID, '131127241')>0,1,0) AS webSalesSessions, 
-    countSubstrings(ymsgoalsID, '131127241') AS sales, 
-    --0.0 AS amountSales,
-    if(countSubstrings(ymsgoalsID, '199402504')>0,1,0) AS registrationCardSessions,
-    if(countSubstrings(ymsgoalsID, '199402597')>0,1,0) AS linkingCardToPhoneNumberSessions, 
-    if(countSubstrings(ymsgoalsID, '226410025')>0,1,0) AS registrationLendingPromotionsSessions, 
-    if(countSubstrings(ymsgoalsID, '232977064')>0,1,0) AS registrationCashbackSessions, 
-    if(countSubstrings(ymsgoalsID, '232977580')>0,1,0) AS couponActivationSessions, 
-    if(countSubstrings(ymsgoalsID, '232977647')>0,1,0) AS participationInLotterySessions,
+    toBool(has(JSONExtractArrayRaw(ymsgoalsID), '425023443')) AS formSubmitSessions, 
     toUInt32(ymspageViews) AS pageViews,
     __emitted_at,
     toLowCardinality('VisitStat') AS __link 

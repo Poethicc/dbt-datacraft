@@ -1,7 +1,7 @@
 {%- macro attr_create_events(
   params = none,
-  funnel_name=none,
-  limit0=none,
+  funnel_name = 'myfirstfunnel',
+  limit0 = none,
   metadata=project_metadata()
   ) -%}
 
@@ -22,6 +22,10 @@
 #}
 
 {%- set funnels = metadata['funnels'] -%}
+
+{%- do dbt_utils.log_info("Значение funnel_name: " ~ funnel_name) -%}
+{%- do dbt_utils.log_info("Значение funnels: " ~ funnels) -%}
+
 {%- set step_name_list = funnels[funnel_name].steps -%}
 {%- set steps = metadata['steps'] -%}
 
@@ -51,11 +55,11 @@ select
     CASE
     {% for step_name in step_name_list %}
         {%- for step_info in steps[step_name] -%}
-            WHEN __link = '{{step_info.link}}' THEN '{{step_name}}'
+            WHEN __link = '{{step_info.link}}' {% if 'condition' in step_info %} and {{step_info.condition}} {% endif %} THEN '{{step_name}}'
         {% endfor %}
     {% endfor %}
     END) as __step
- from {{ ref('attr_' ~model_name~ '_prepare_with_qid') }}
+ from {{ ref('attr_' ~ funnel_name ~ '_prepare_with_qid') }}
 {% if limit0 %}
 LIMIT 0
 {%- endif -%}

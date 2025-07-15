@@ -49,23 +49,28 @@
 {#- задаём наименования числовых типов данных -#}
 {%- set numeric_types = ['UInt8', 'UInt16', 'UInt32', 'UInt64', 'UInt256', 
                         'Int8', 'Int16', 'Int32', 'Int64', 'Int128', 'Int256',
-                        'Float8', 'Float16','Float32', 'Float64','Float128', 'Float256','Num'] -%} 
+                        'Float8', 'Float16','Float32', 'Float64','Float128', 'Float256','Num'] -%}
 
-{#- для каждой колонки таблицы, на которую будем ссылаться -#}
-SELECT {% for c in source_columns -%}
-{#- если тип данных колонки не числовой - добавляем её в список для будущей группировки -#}
-{% if c.data_type not in numeric_types %}{{ c.name }}
-{%- do group_by_fields.append(c.name)  -%}
-{#- а если тип данных колонки числовой - суммируем данные по ней -#}
-{%- elif c.data_type in numeric_types %}SUM({{ c.name }}) AS {{ c.name }}
-{#- а для остальных (т.е. колонок не числового типа данных) - делаем MAX - чтобы избежать дублей -#}
-{%- else %} MAX({{ c.name }}) AS {{ c.name }}
-{#- после каждой строки кроме последней расставляем запятые, чтобы сгенерировался читаемый запрос -#}
-{%- endif %}{% if not loop.last %},{% endif %}{% endfor %} 
+{#- определяем колонки для группировки -#}
+{%- set group_by_columns = ['__id', '__datetime'] -%}
+
+SELECT 
+{% for c in source_columns -%}
+    {#- если колонка входит в список для группировки - выводим как есть #}
+    {%- if c.name in group_by_columns -%}
+        {{ c.name }}
+    {#- если тип данных колонки числовой - суммируем #}
+    {%- elif c.data_type in numeric_types -%}
+        SUM({{ c.name }}) AS {{ c.name }}
+    {#- для всех остальных колонок используем MAX #}
+    {%- else -%}
+        MAX({{ c.name }}) AS {{ c.name }}
+    {%- endif -%}
+    {%- if not loop.last %},{% endif %}
+{% endfor %} 
 FROM {{ ref(source_model_name) }}
-GROUP BY {{ group_by_fields | join(', ') }}
+GROUP BY {{ group_by_columns | join(', ') }}
 {% if limit0 %}
 LIMIT 0
 {%- endif -%}
-
 {% endmacro %}

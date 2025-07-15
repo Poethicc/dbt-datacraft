@@ -4,11 +4,11 @@
     incremental_datetime_formula=none,
     disable_incremental_datetime_field=none,
     defaults_dict=fieldconfig(), 
-    schema_pattern='airbyte_internal', 
+    schema_pattern=this.schema, 
     source_table=none, 
     override_target_model_name=none,
     debug_column_names=False,
-    old_airbyte=true,
+    old_airbyte=false,
     limit0=none) -%}
 
 {#- schema_pattern=this.schema или 'airbyte_internal'-#}
@@ -17,7 +17,6 @@
 первый этап - parse, здесь делается manifest, на втором этапе уже поймёт ref - возьмет его из манифеста. 
 Надо завернуть в execute, иначе будет пусто -#}
 {%- if execute -%}
-
 {#- задаём части имени - либо из параметра, либо из имени файла - разбивая на части по знаку _ -#}
 {%- set model_name_parts = (override_target_model_name or this.name).split('_') -%}
 
@@ -30,15 +29,32 @@
 {%- set sourcetype_name = model_name_parts[1] -%}
 {%- set pipeline_name = model_name_parts[2] -%}
 {%- set template_name = model_name_parts[3] -%}
+{%- set account_name = model_name_parts[4] -%}
 {%- set last_model_name_part = model_name_parts[-1] -%}
-{%- set stream_name_parts = model_name_parts[4:] -%}
+{%- set stream_name_parts = model_name_parts[5:] -%}
 {%- set stream_name = '_'.join(stream_name_parts) -%}
-{#- было: set table_pattern = '_airbyte_raw_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_' ~ template_name ~ '_[^_]+_' ~ stream_name ~ '$' -#}
-{#- {%- set table_pattern = '[^_]+_' ~ 'raw__stream_' ~ sourcetype_name ~ '_' ~ template_name ~ '_[^_]+_' ~ stream_name ~ '$' -%} -#}
+
+
+{%- if sourcetype_name == 'vkads' -%}
+    {%- set sourcetype_name = 'vkadsold' -%}
+{%- elif sourcetype_name == 'adsvk' -%}  
+    {%- set sourcetype_name = 'vkadsnew' -%}
+    {%- set account_name = 'd5fc56c35dagencyclient' -%}
+{%- endif -%}
+
+{%- if schema_pattern == 'datacraft2' -%}
+{%- set table_pattern = '_airbyte_raw_' ~ sourcetype_name ~ '_' ~ template_name ~ '_' ~ account_name ~ '_' ~ stream_name ~ '$' -%}
+{%- else -%}
+{%- set old_airbyte = true -%}
 {%- set table_pattern = '[^_]+(?:_[^_]+)*_raw__stream_' ~ sourcetype_name ~ '_' ~ template_name ~ '_[^_]+_' ~ stream_name ~ '$' -%}
+{%- endif -%}
+
 {#- [^_]+(?:_[^_]+)*_ — эта часть паттерна позволяет указать одно или несколько слов, разделённых подчеркиванием, перед raw__stream_.
 [^_]+ — обозначает одно слово перед подчеркиванием.
 (?:_[^_]+)* — обозначает ноль или более дополнительных слов, также разделённых подчеркиванием. -#} 
+
+{#- {%- do dbt_utils.log_info("Значение table_pattern: " ~ table_pattern) -%} -#}
+{#- {%- do dbt_utils.log_info("Значение schema_pattern: " ~ schema_pattern) -%} -#}
 
 {%- if pipeline_name in ('registry', 'periodstat') -%}
 {%- set disable_incremental_datetime_field=true -%}
@@ -57,6 +73,7 @@
 {%- if not relations -%}
     {{ exceptions.raise_compiler_error('No relations were found matching the pattern "' ~ table_pattern ~ '". Please ensure that your source data follows the expected structure.') }}
 {%- endif -%}
+
 
 {#- собираем одинаковые таблицы, которые будут проходить по этому макросу  - здесь union all найденных таблиц -#}
 {%- set source_table = '(' ~ datacraft.custom_union_relations_source(relations) ~ ')' -%} 

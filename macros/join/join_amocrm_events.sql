@@ -21,14 +21,15 @@
 {%- set sourcetype_name = 'amocrm' -%}
 {%- set pipeline_name = 'events' -%} 
 {%- set pipeline_name_registry = 'registry' -%}
+{%- set template_name = 'default' -%}
 
 {#- для каждого стрима собираем инкрементал-таблицы и создаём свой source_table_<...> -#}
 {#- стрим events -#}
-{%- set table_pattern_events = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~  '_[^_]+_' ~ 'events' ~ '$' -%}
+{%- set table_pattern_events = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_'  ~ template_name ~  '_(?:[^_]+_)?' ~ 'events' ~ '$' -%}
 {%- set relations_events = datacraft.get_relations_by_re(schema_pattern=target.schema, table_pattern=table_pattern_events) -%}   
 {%- if not relations_events -%} 
     {{ exceptions.raise_compiler_error('No relations_events.
-    No data follows the expected pattern: "incremental_{sourcetype_name}_{pipeline_name}_{template_name}_events"') }}
+    "' ~ table_pattern_events ~ '"') }}
 {%- endif -%}
 {%- set source_table_events = '(' ~ dbt_utils.union_relations(relations_events) ~ ')' -%}  
 {%- if not source_table_events -%} 
@@ -37,11 +38,11 @@
 {%- endif -%}
 
 {#- стрим leads -#}
-{%- set table_pattern_leads = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~  '_[^_]+_' ~ 'leads' ~ '$' -%}
+{%- set table_pattern_leads = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_'  ~ template_name ~  '_(?:[^_]+_)?' ~ 'leads' ~ '$' -%}
 {%- set relations_leads = datacraft.get_relations_by_re(schema_pattern=target.schema, table_pattern=table_pattern_leads) -%}   
 {%- if not relations_leads -%} 
     {{ exceptions.raise_compiler_error('No relations_leads. 
-    No data follows the expected pattern: "incremental_{sourcetype_name}_{pipeline_name}_{template_name}_leads"') }}
+    No data follows the expected pattern: "' ~ table_pattern_ad_table_pattern_leadsplans_statistics ~ '"') }}
 {%- endif -%}
 {%- set source_table_leads = '(' ~ dbt_utils.union_relations(relations_leads) ~ ')' -%}    
 {%- if not source_table_leads -%} 
@@ -50,11 +51,11 @@
 {%- endif -%}
 
 {#- стрим contacts -#}
-{%- set table_pattern_contacts = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~  '_[^_]+_' ~ 'contacts' ~ '$' -%}
+{%- set table_pattern_contacts = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_'  ~ template_name ~  '_(?:[^_]+_)?' ~ 'contacts' ~ '$' -%}
 {%- set relations_contacts = datacraft.get_relations_by_re(schema_pattern=target.schema, table_pattern=table_pattern_contacts) -%}   
 {%- if not relations_contacts -%} 
     {{ exceptions.raise_compiler_error('No relations_contacts. 
-    No data follows the expected pattern: "incremental_{sourcetype_name}_{pipeline_name}_{template_name}_contacts"') }}
+    No data follows the expected pattern: "' ~ table_pattern_contacts ~ '"') }}
 {%- endif -%}
 {%- set source_table_contacts = '(' ~ dbt_utils.union_relations(relations_contacts) ~ ')' -%}    
 {%- if not source_table_contacts -%} 
@@ -63,11 +64,11 @@
 {%- endif -%}
 
 {#- стрим pipelines -#}
-{%- set table_pattern_pipelines = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name_registry ~  '_[^_]+_' ~ 'pipelines' ~ '$' -%}
+{%- set table_pattern_pipelines = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name_registry ~ '_'  ~ template_name ~  '_(?:[^_]+_)?' ~ 'pipelines' ~ '$' -%}
 {%- set relations_pipelines = datacraft.get_relations_by_re(schema_pattern=target.schema, table_pattern=table_pattern_pipelines) -%}   
 {%- if not relations_pipelines -%} 
     {{ exceptions.raise_compiler_error('No relations_pipelines. 
-    No data follows the expected pattern: "incremental_{sourcetype_name}_{pipeline_name_registry}_{template_name}_pipelines"') }}
+    No data follows the expected pattern: "' ~ table_pattern_pipelines ~ '"') }}
 {%- endif -%}
 {%- set source_table_pipelines = '(' ~ dbt_utils.union_relations(relations_pipelines) ~ ')' -%}    
 {%- if not source_table_pipelines -%} 
@@ -103,7 +104,7 @@ select  --__date, --дата, берётся из created_at на normalize
     case 
         when type = 'lead_status_changed'  then JSON_VALUE(value_after, '$[0].lead_status.pipeline_id')
     end as pipelineId, -- ID воронки (соответствует pipelineId из стрима pipelines)
-    JSONExtractString(JSONExtractString(_links, 'self'), 'href') as crmSystemLinkForEvents,
+    JSONExtractString(JSONExtractRaw(JSONExtractRaw(JSONExtractRaw(_embedded, 'entity'), '_links'), 'self', 'href')) as crmSystemLinkForEvents,
     -- технические поля
     toLowCardinality('CrmEventStat') AS __link, --поле из методологии dataCraft Core (нужно для последующих шагов hash, link)
     toLowCardinality(__table_name) as __table_name,
@@ -122,7 +123,7 @@ where type in ['lead_status_changed', 'lead_deleted', 'lead_added', 'contact_add
 -#}
 , lead_contact_matching as (
 select
-    toLowCardinality(splitByChar('_', __table_name)[7]) AS accountName,
+    toLowCardinality(splitByChar('_', __table_name)[6]) AS accountName,
     account_id as systemAccountId, -- ID аккаунта, в котором находится сделка
     id as leadId, -- ID сделки
     JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'contacts')), 'id') as contactId, -- ID контакта
@@ -134,7 +135,7 @@ where contactIsMain = 'true'
 {#- стрим leads - содержит данные по сделкам -#}
 , leads as (
 select  --__date, --дата, берётся из created_at на NORMALIZE (нужна только дата события, дата создания сделки в поле leadCreatedAtDate)
-    toLowCardinality(splitByChar('_', __table_name)[7]) AS accountName,
+    toLowCardinality(splitByChar('_', __table_name)[6]) AS accountName,
     id as leadId, -- ID сделки
     name as leadName, -- Название сделки
     toFloat64OrNull(price) as price, -- Бюджет сделки (в старой версии это поле назыалось sale)
@@ -147,7 +148,7 @@ select  --__date, --дата, берётся из created_at на NORMALIZE (н�
     created_by as leadCreatedBy, -- ID пользователя, создающий сделку
     updated_by as leadUpdatedBy, -- ID пользователя, изменивего сделку
     --НУЖНО В UTC (сначала проверить как api отдаёт данные)
-    toDateTimeOrZero(closed_at) as leadClosedAtDate, -- Дата закрытия сделки, передается в Unix Timestamp
+    --toDateTimeOrZero(closed_at) as leadClosedAtDate, -- Дата закрытия сделки, передается в Unix Timestamp
     toDateTime(created_at) as leadCreatedAtDate, -- Дата создания сделки, передается в Unix Timestamp
     toDateTime(updated_at) as leadUpdateddAtDate, -- Дата изменения сделки, передается в Unix Timestamp
     toDateTimeOrZero(closest_task_at) as leadClosestTaskAt, --Дата ближайшей задачи к выполнению, передается в Unix Timestamp
@@ -155,21 +156,24 @@ select  --__date, --дата, берётся из created_at на NORMALIZE (н�
     -- custom_fields_values - Массив, содержащий информацию по значениям дополнительных полей, заданных для данной сделки (уточнить какие ещё данные тут могут быть нужны)
     JSONExtractArrayRaw(custom_fields_values) as customFieldsValuesArrayLeads, --также тянем целиком, на финальном шаге извлечём всё что нужно по справочнику
     --UTM_CONTENT 
-    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%UTM_CONTENT%', 
+    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> JSONExtractString(x, 'field_name') = 'utm_content', 
     JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as utmContent,
     --UTM_SOURCE 
-    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%UTM_SOURCE%', 
+    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> JSONExtractString(x, 'field_name') = 'utm_source', 
     JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as utmSource,
     --UTM_MEDIUM 
-    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%UTM_MEDIUM%', 
+    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> JSONExtractString(x, 'field_name') = 'utm_medium', 
     JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as utmMedium,
     --UTM_TERM
-    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%UTM_TERM%', 
+    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> JSONExtractString(x, 'field_name') = 'utm_term', 
     JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as utmTerm,
     --UTM_CAMPAIGN
-    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%UTM_CAMPAIGN%', 
+    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> JSONExtractString(x, 'field_name') = 'utm_campaign', 
     JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as utmCampaign,
-    -- остальные значения из custom_fields_values извлекаем на самом последнем слое обработки данных, так как это менее универсальные параметры
+    --ym_clientId
+    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> JSONExtractString(x, 'field_name') = 'yclid', 
+    JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as clientId,
+    -- остальные полезные значения из custom_fields_values
     --
     toInt64OrNull(score) as leadScore, -- Скоринг сделки
     account_id as systemAccountId, -- ID аккаунта, в котором находится сделка
@@ -183,7 +187,9 @@ select  --__date, --дата, берётся из created_at на NORMALIZE (н�
     --
     --_embedded[companies] - Данные компании, привязанной к сделке, в данном массиве всегда 1 элемент, так как у сделки может быть только 1 компания
     JSONExtractString(JSONExtractArrayRaw(_embedded, 'companies')[1], 'id')  as leadCompanyId, -- ID компании, привязанной к сделке
-    JSONExtractString(JSONExtractString(_links, 'self'), 'href') as crmSystemLinkForLeads
+    --
+    JSONExtractString(JSONExtractString(JSONExtractString(arrayFilter(x -> JSONExtractBool(x, 'is_main') = true,
+    JSONExtractArrayRaw(_embedded, 'contacts'))[1],'_links'),'self'),'href') as crmSystemLinkForLeads
     --технические поля, в финальную таблицу шага join идут данные из основной таблицы, к которой приджойниваем, т.е. в нашем случае из events
     --toLowCardinality('CrmEventStat') AS __link, --поле из методологии dataCraft Core (нужно для последующих шагов hash, link)
     --toLowCardinality(__table_name) as __table_name,
@@ -195,12 +201,13 @@ from {{ source_table_leads }}
 {#- стрим contacts - данные по контактам -#}
 , contacts as (
 select -- __date, --дата, берётся из created_at на NORMALIZE (нужна только дата события, дата создания контакта в поле contactCreatedAtDate)
-    toLowCardinality(splitByChar('_', __table_name)[7]) AS accountName,
+    toLowCardinality(splitByChar('_', __table_name)[6]) AS accountName,
     id as contactId, --ID контакта
     name as contactName, --Название контакта
     first_name as firstName, --Имя контакта
     last_name as lastName, --Фамилия контакта
-    -- custom_fields_values - Массив, содержащий информацию по значениям дополнительных полей, заданных для данного контакта
+    --custom_fields_values -- Массив, содержащий информацию по значениям дополнительных полей, заданных для данного контакта
+    JSONExtractArrayRaw(custom_fields_values) as customFieldsValuesArrayContacts, --также тянем целиком, на финальном шаге извлечём всё что нужно по справочнику
     -- для телефона и email получаем вот так, так как может быть указано несколько значений: 
     --ТЕЛЕФОН
     arrayMap(x -> JSONExtractString(x, 'value'), 
@@ -218,18 +225,19 @@ select -- __date, --дата, берётся из created_at на NORMALIZE (н�
     arrayMap(x -> JSONExtractString(x, 'enum_code'), 
         JSONExtractArrayRaw(JSONExtractString(
             arrayFilter(x -> x LIKE '%EMAIL%', JSONExtractArrayRaw(custom_fields_values))[1],'values'))) AS emailCodes,
+    -- остальные полезные значения из custom_fields_values
     -- для пола и возраста чуть-чуть подругому, так как не может быть два значения (по логике)
     --Пол
-    JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%Пол%', JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as gender,
+    --JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%Пол%', JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value') as gender,
     -- Возраст
-    toInt8OrNull(JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%Возраст%', JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value')) as age,
+    --toInt8OrNull(JSONExtractString(JSONExtractArrayRaw(arrayFilter(x -> x LIKE '%Возраст%', JSONExtractArrayRaw(custom_fields_values))[1], 'values')[1], 'value')) as age,
     responsible_user_id as contactResponsibleUserId, --ID пользователя, ответственного за контакт УТОЧНИТЬ ПРО НЕЙМИНГ ПОЛЯ!!!! 
     group_id as contactGroupId, --ID группы, в которой состоит ответственны пользователь за контакт
     created_by as contactCreatedBy, -- ID пользователя, создавший контакт --ОК НАЗВАНИЕ???
     updated_by as contactUpdatedBy, --ID пользователя, изменивший контакт
     --ВОПРОС СОХРАНЯТЬ ЛИ ВРЕМЯ ИЛИ ДОСТАТОЧНО ДАТЫ? и нужно ли указывать UTC или нет? в UCT и оставляем дату и время
     toDateTime(created_at) as contactCreatedAtDate, -- Дата создания контакта, передается в Unix Timestamp 
-    toDateTime(updated_at) as contactUpdateddAtDate, -- Дата изменения контакта, передается в Unix Timestamp
+    toDateTime(updated_at) as contactUpdatedAtDate, -- Дата изменения контакта, передается в Unix Timestamp
     is_deleted as contactIsDeleted, -- Удален ли элемент
     toDateTimeOrZero(closest_task_at) as contactClosestTaskAt, --Дата ближайшей задачи к выполнению, передается в Unix Timestamp
     account_id as systemAccountId, -- ID аккаунта, в котором находится контакт
@@ -238,7 +246,8 @@ select -- __date, --дата, берётся из created_at на NORMALIZE (н�
     JSONExtractString(JSONExtractArrayRaw(_embedded, 'companies')[1], 'id')  as contactCompanyId, -- ID компании, привязанной к контакту
     -- в _embedded[leads] - Данные сделок, привязанных к контакту. Одному контакту может соответствовать несколько сделок.
     -- для соединения данных (и если будет нужны графовая склейка) по лидам и контактам будет использоваться отдельная табличка LeadContactMatching (её я получаю из массива _embedded[contacts] стрима leads)
-    JSONExtractString(JSONExtractString(_links, 'self'), 'href') as crmSystemLinkForContacts 
+    JSONExtractString(JSONExtractArrayRaw(_embedded, 'leads')[1], 'id') as contactLeadId,
+    JSONExtractString(JSONExtractString(JSONExtractString(JSONExtractArrayRaw(_embedded, 'leads')[1], '_links'),'self'), 'href') as crmSystemLinkForContacts 
     --технические поля, в финальную таблицу шага join идут данные из основной таблицы, к которой приджойниваем, т.е. в нашем случае из events
     --toLowCardinality('CrmEventStat') AS __link, --поле из методологии dataCraft Core (нужно для последующих шагов hash, link)
     --toLowCardinality(__table_name) as __table_name,
@@ -258,7 +267,7 @@ left join contacts using(contactId, systemAccountId, accountName)
 {#- стрим pipelines - содержит информацию по воронкам и шагам воронок (статусам) -#}
 , pipelines as (
 select  
-    toLowCardinality(splitByChar('_', __table_name)[7]) AS accountName,
+    toLowCardinality(splitByChar('_', __table_name)[6]) AS accountName,
     id as pipelineId, --ID воронки
     name as pipelineName, -- Название воронки
     toInt8(sort) as pipelineSort, -- Сортировка воронки
@@ -272,8 +281,8 @@ select
     toInt16(JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'statuses')), 'sort')) as statusSort,
     JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'statuses')), 'is_editable') as statusIsEditable,
     JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'statuses')), 'type') as statusType,
-    JSONExtractString(JSONExtractString(JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'statuses')), '_links'), 'self'), 'href') as crmSystemLinkForStatus,
-    JSONExtractString(JSONExtractString(_links, 'self'), 'href') as crmSystemLinkForPipelines
+    JSONExtractString(JSONExtractString(JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'statuses')), '_links'), 'self'), 'href') as crmSystemLinkForStatus
+    --JSONExtractString(JSONExtractString(_links, 'self'), 'href') as crmSystemLinkForPipelines
     --технические поля, в финальную таблицу шага join идут данные из основной таблицы, к которой приджойниваем, т.е. в нашем случае из events
     --toLowCardinality('CrmEventStat') AS __link, --поле из методологии dataCraft Core (нужно для последующих шагов hash, link)
     --toLowCardinality(__table_name) as __table_name,
@@ -335,7 +344,7 @@ select
     statusIsEditable,
     statusType,
     crmSystemLinkForStatus,
-    crmSystemLinkForPipelines,
+    --crmSystemLinkForPipelines,
     -- Поля сделок
     leadId,
     leadName,
@@ -348,7 +357,7 @@ select
     leadSourceId,
     leadCreatedBy,
     leadUpdatedBy,
-    leadClosedAtDate,
+    --leadClosedAtDate,
     leadCreatedAtDate,
     leadUpdateddAtDate,
     leadClosestTaskAt,
@@ -359,6 +368,7 @@ select
     utmMedium,
     utmTerm,
     utmCampaign,
+    clientId,
     leadScore,
     leadLaborCost,
     isPriceModifiedByRobot,
@@ -375,14 +385,14 @@ select
     phoneCodes,
     email,
     emailCodes,
-    gender,
-    age,
+    --gender,
+    --age,
     contactResponsibleUserId,
     contactGroupId,
     contactCreatedBy,
     contactUpdatedBy,
     contactCreatedAtDate,
-    contactUpdateddAtDate,
+    contactUpdatedAtDate,
     contactIsDeleted,
     contactClosestTaskAt,
     contactCompanyId,
@@ -421,7 +431,7 @@ select
     '' as statusIsEditable,
     '' as statusType,
     '' as crmSystemLinkForStatus,
-    '' as crmSystemLinkForPipelines,
+    --'' as crmSystemLinkForPipelines,
     -- Поля сделок
     '' AS leadId,
     '' AS leadName,
@@ -434,7 +444,7 @@ select
     '' AS leadSourceId,
     '' AS leadCreatedBy,
     '' AS leadUpdatedBy,
-    toDateTime(0) AS leadClosedAtDate,
+    --toDateTime(0) AS leadClosedAtDate,
     toDateTime(0) AS leadCreatedAtDate,
     toDateTime(0) AS leadUpdateddAtDate,
     toDateTime(0) AS leadClosestTaskAt,
@@ -445,6 +455,7 @@ select
     '' AS utmMedium,
     '' AS utmTerm,
     '' AS utmCampaign,
+    '' as clientId,
     null AS leadScore,
     null AS leadLaborCost,
     '' AS isPriceModifiedByRobot,
@@ -461,14 +472,14 @@ select
     phoneCodes,
     email,
     emailCodes,
-    gender,
-    age,
+    --gender,
+    --age,
     contactResponsibleUserId,
     contactGroupId,
     contactCreatedBy,
     contactUpdatedBy,
     contactCreatedAtDate,
-    contactUpdateddAtDate,
+    contactUpdatedAtDate,
     contactIsDeleted,
     contactClosestTaskAt,
     contactCompanyId,

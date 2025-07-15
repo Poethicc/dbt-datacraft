@@ -12,7 +12,7 @@
             table_name as {{ adapter.quote("table_name") }},
             {{ datacraft.get_table_types_sql() }}
         from information_schema.tables
-        where match(table_schema, '{{ schema_pattern }}')
+        where match(table_schema, '^{{ schema_pattern }}$')
         and match(table_name, '{{ table_pattern }}')        
 {% endmacro %}
 

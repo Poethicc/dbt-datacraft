@@ -27,34 +27,32 @@
         {%- set cols = adapter.get_columns_in_relation(relation) -%}
         {%- for col in cols -%}
 
-        {#- If an exclude list was provided and the column is in the list, do nothing -#}
-        {%- if exclude and col.column in exclude -%}
+            {#- If an exclude list was provided and the column is in the list, do nothing -#}
+            {%- if exclude and col.column in exclude -%}
 
-        {#- If an include list was provided and the column is not in the list, do nothing -#}
-        {%- elif include and col.column not in include -%}
+            {#- If an include list was provided and the column is not in the list, do nothing -#}
+            {%- elif include and col.column not in include -%}
 
-        {#- Otherwise add the column to the column superset -#}
-        {%- else -%}
+            {#- Otherwise add the column to the column superset -#}
+            {%- else -%}
 
-            {#- update the list of columns in this relation -#}
-            {%- do relation_columns[relation].append(col.column) -%}
+                {#- update the list of columns in this relation -#}
+                {%- do relation_columns[relation].append(col.column) -%}
 
-            {%- if col.column in column_superset -%}
+                {%- if col.column in column_superset -%}
 
-                {%- set stored = column_superset[col.column] -%}
-                {%- if col.is_string() and stored.is_string() and col.string_size() > stored.string_size() -%}
+                    {%- set stored = column_superset[col.column] -%}
+                    {%- if col.is_string() and stored.is_string() and col.string_size() > stored.string_size() -%}
+                        {%- do column_superset.update({col.column: col}) -%}
+                    {%- endif %}
+
+                {%- else -%}
 
                     {%- do column_superset.update({col.column: col}) -%}
 
-                {%- endif %}
-
-            {%- else -%}
-
-                {%- do column_superset.update({col.column: col}) -%}
+                {%- endif -%}
 
             {%- endif -%}
-
-        {%- endif -%}
 
         {%- endfor -%}
     {%- endfor -%}
@@ -62,39 +60,32 @@
     {%- set ordered_column_names = column_superset.keys() -%}
 
     {%- for relation in relations %}
-
 (
-SELECT
+SELECT {# яхз, это нужно для пробела #}
 {%- for col_name in ordered_column_names -%}
-{%- set col = column_superset[col_name] %}
-{%- set col_type = column_override.get(col.column, col.data_type) if col_name in relation_columns[relation] else col.data_type %}
-
-{# {{ log("Тип данных столбца " ~ col_name ~ ": " ~ col_type, info=true) }} #}
-
-{# старая версия, не учитывала тип данных array
- {%- set col_expr = adapter.quote(col_name) if col_name in relation_columns[relation] else ("''" if 'String' in col_type else "0") %}
-         to{{ col_type.split('(')[0] }}({{ col_expr }}) as {{ col.name }} {% if not loop.last %},{% endif -%} 
-#}
-
-{#- новая версия: -#}
-    {%- set col_expr = datacraft.union_column_expression(col_type, col_name) %}
+    {%- set col = column_superset[col_name] %}
+    {%- set col_type = column_override.get(col.column, col.data_type) %}
     
-    {# {{ log("Выражение для столбца " ~ col_name ~ ": " ~ col_expr, info=true) }} #}
-    
-    {%- if 'array' in col_type | lower -%}
-        {{ col_expr }} as {{ col.name }} {% if not loop.last %},{% endif %}
+    {#- Check if column exists in current relation -#}
+    {%- if col_name in relation_columns[relation] -%}
+        {%- set col_expr = adapter.quote(col_name) -%}
     {%- else -%}
-        to{{ col_type.split('(')[0] }}({{ col_expr }}) as {{ col.name }} {% if not loop.last %},{% endif %}
+        {#- Use the union_column_expression macro to get default value -#}
+        {%- set col_expr = datacraft.union_column_expression(col_type, none) -%}
     {%- endif -%}
     
+    {#- Apply type casting (except for arrays) -#}
+    {%- if 'array' in col_type | lower -%}
+        {{ col_expr }} as {{ col.name }}{% if not loop.last %},{% endif %}
+    {%- else -%}
+        to{{ col_type.split('(')[0] }}({{ col_expr }}) as {{ col.name }}{% if not loop.last %},{% endif %}
+    {%- endif -%}
 {%- endfor %}
 FROM {{ relation }}
 )
-
 {% if not loop.last -%}
 UNION ALL
 {% endif -%}
-
 {%- endfor -%}
 
 {%- endmacro -%}

@@ -65,10 +65,13 @@ final as (
     Выборка данных с добавлением порядкового номера строки (__rn) для каждой группы.
 #}
 select
-    qid, __link, __id,
-    __priority, __datetime,
+    qid, __link,
+     __id,
+    __priority,
+     __datetime,
     __period_number,
-    __if_missed,__step,
+    __if_missed,
+    __step,
     row_number() over (partition by qid order by __datetime, __priority, __id) AS __rn
 from final
 {% if limit0 %}

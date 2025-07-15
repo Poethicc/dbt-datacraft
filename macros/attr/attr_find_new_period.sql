@@ -5,6 +5,9 @@
   metadata=project_metadata()
   ) -%}
 
+{%- set model_name_parts = (override_target_model_name or this.name).split('_') -%}
+{%- set model_name = model_name_parts[1] -%}
+
 {# 
     Настройка материализации данных.
     materialized='table' указывает, что данные будут материализованы в таблицу.
@@ -33,7 +36,7 @@
 {% endfor %}
 
 {# Извлечение данных с описанием шагов. Отсюда получаем данные по линкам #}
-{% set steps =  events_description %}
+{# {% set steps =  events_description %} #}
 
 {# 
     Подготовка нового периода.
@@ -43,7 +46,7 @@ with prep_new_period as (
     select
         *,
         max(case when __priority in {{counter}} then __datetime else null end) over (partition by qid order by __rn rows between unbounded preceding and 1 preceding) as prep_new_period
-    from {{ ref('attr_' ~model_name~ '_add_row_number') }}
+    from {{ ref('attr_' ~ model_name ~ '_add_row_number') }}
 )
 
 {# 
@@ -61,15 +64,13 @@ select
     __rn,
     __step,
     CASE
-    {% for step in funnel_steps %}
-        {% set slug = step['slug'] %}
-        {% set timeout = step['timeout'] %}
-        {% set step_links = events_description[slug] %}  {# Получаем список шагов для текущего slug из events_description #}
-
-        {% for step_info in step_links %}
-            WHEN __link = '{{ step_info.link }}' AND toDate(__datetime) - toDate(prep_new_period) < {{ timeout }} THEN false
+    {% for step_name in step_name_list %}
+        {%- set counter = loop.index -%}
+        WHEN __step = '{{step_name}}' and toDate(__datetime) - toDate(prep_new_period) < 
+        {% for step_info in steps[step_name] %}
+            {% if 'period' in step_info %} {{step_info.period}} {% else %} 90 {% endif %} THEN false
         {% endfor %}
-    {% endfor %}
+    {%- endfor -%}
     ELSE true
 END as __is_new_period
  from prep_new_period   

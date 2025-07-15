@@ -18,7 +18,9 @@
 {%- if execute -%}
 {%- set sourcetype_name = 'yd' -%}
 {%- set pipeline_name = 'datestat' -%}
-{%- set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~  '_[^_]+'  -%}
+{%- set template_name = 'default' -%}
+
+{%- set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_' ~ template_name ~  '_[^_]+'  -%}
 {%- set relations = datacraft.get_relations_by_re(schema_pattern=target.schema, table_pattern=table_pattern) -%}  
 {%- if not relations -%} 
     {{ exceptions.raise_compiler_error('No relations were found matching the pattern "' ~ table_pattern ~ '". 
@@ -53,14 +55,17 @@ WHERE toDate(__date) BETWEEN '{{date_from}}' AND '{{date_to}}'
 SELECT  
     toDate(__date) AS __date,
     toLowCardinality('*') AS reportType, 
-    toLowCardinality(splitByChar('_', __table_name)[8]) AS accountName,
+    toLowCardinality(splitByChar('_', __table_name)[7]) AS accountName,
     toLowCardinality(__table_name) AS __table_name,
     'Yandex Direct Ads' AS adSourceDirty,
     --'' AS productName,
     CampaignName AS adCampaignName,
-    CampaignType AS adGroupName,
+    --CampaignType AS adGroupName,
     CampaignId AS adId,
-    '' AS adPhraseId,
+    (toFloat64(Cost)/1000000) AS adCost,
+    toInt32(Impressions) AS impressions,
+    toInt32(Clicks) AS clicks,
+    --'' AS adPhraseId,
     '' AS utmSource,
     '' AS utmMedium,
     '' AS utmCampaign,
@@ -71,9 +76,6 @@ SELECT
     --'' AS adTitle2,
     --'' AS adText,
     --'' AS adPhraseName,  
-    (toFloat64(Cost)/1000000)*1.2 AS adCost,
-    toInt32(Impressions) AS impressions,
-    toInt32(Clicks) AS clicks,
     __emitted_at,
     toLowCardinality('AdCostStat') AS __link 
 FROM cmps

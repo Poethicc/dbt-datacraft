@@ -19,10 +19,10 @@
 {#- задаём переменные - источник, пайплайн, шаблон, поток, и паттерн собранный из них -#}
 {%- set sourcetype_name = model_name_parts[1] -%}
 {%- set pipeline_name = model_name_parts[2] -%}
-{%- set template_name = model_name_parts[3] -%}
-{%- set stream_name_parts = model_name_parts[4:] -%}
+{#- stream_name_parts - фактически это account_name + stream_name -#}
+{%- set stream_name_parts = model_name_parts[3:] -%}
 {%- set stream_name = '_'.join(stream_name_parts) -%}
-{%- set table_pattern = 'normalize_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_' ~ template_name ~ '_' ~ stream_name -%}
+{%- set table_pattern = 'normalize_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ template_name ~ '_' ~ stream_name -%}
 
 {%- if pipeline_name in ('registry', 'periodstat') -%}
 {%- set disable_incremental=true -%}

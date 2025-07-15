@@ -22,9 +22,9 @@
 with 
     out as ( 
         select * except(_dbt_source_relation) 
-        from  {{ ref('attr_' ~model_name~ '_join_to_attr_prepare_with_qid') }}
-        join  {{ ref('attr_' ~model_name~ '_model') }}
-            using (qid, __datetime, __id, __link, __period_number, __if_missed, __priority)
+        from  {{ ref('attr_' ~ funnel_name ~ '_join_to_attr_prepare_with_qid') }}
+        join  {{ ref('attr_' ~ funnel_name ~ '_model') }}
+            using (qid, __datetime, __id, __link, __period_number, __priority)
     )
     
 select * from out 

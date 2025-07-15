@@ -4,6 +4,10 @@
   limit0=none
   ) -%}
 
+
+{%- set model_name_parts = (override_target_model_name or this.name).split('_') -%}
+{%- set model_name = model_name_parts[1] -%}
+
 {# 
     Настройка материализации данных.
     order_by=('qid', '__datetime', '__link', '__id') 
@@ -23,7 +27,7 @@
 select
     *,
     sum(toInt32(__is_new_period)) over (partition by qid order by __rn) AS __period_number
-from {{ ref('attr_' ~model_name~ '_find_new_period') }}
+from {{ ref('attr_' ~ model_name ~ '_find_new_period') }}
 {% if limit0 %}
 LIMIT 0
 {%- endif -%}

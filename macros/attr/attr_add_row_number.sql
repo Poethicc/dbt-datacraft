@@ -4,6 +4,9 @@
   limit0=none
   ) -%}
 
+{%- set model_name_parts = (override_target_model_name or this.name).split('_') -%}
+{%- set model_name = model_name_parts[1] -%}
+
 {# 
     Настройка материализации данных.
     order_by=('qid', '__datetime', '__link', '__id') 

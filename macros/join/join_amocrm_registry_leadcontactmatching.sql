@@ -16,8 +16,9 @@
 {%- if execute -%}
 {%- set sourcetype_name = 'amocrm' -%}
 {%- set pipeline_name = 'events' -%} {# изначально у нас нет справочника, создаём его из данных стрима leads пайплайны events #}
+{%- set template_name = 'default' -%}
 {%- set stream_name = 'leads' -%}
-{%- set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~  '_[^_]+_' ~ stream_name ~ '$' -%}
+{%- set table_pattern = 'incremental_' ~ sourcetype_name ~ '_' ~ pipeline_name ~ '_'  ~ template_name ~  '_(?:[^_]+_)?' ~ stream_name ~ '$' -%}
 {%- set relations = datacraft.get_relations_by_re(schema_pattern=target.schema, table_pattern=table_pattern) -%}  
 {%- if not relations -%} 
     {{ exceptions.raise_compiler_error('No relations were found matching the pattern "' ~ table_pattern ~ '". 
@@ -29,7 +30,7 @@
 {%- endif -%}
 
 SELECT
-    splitByChar('_', __table_name)[7] AS accountName,
+    splitByChar('_', __table_name)[6] AS accountName,
     id as leadId, -- ID сделки
     JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'contacts')), 'id') as contactId, -- ID контакта
     JSONExtractString(arrayJoin(JSONExtractArrayRaw(_embedded, 'contacts')), 'is_main') as contactIsMain, -- Является ли контакт главным для сделки
